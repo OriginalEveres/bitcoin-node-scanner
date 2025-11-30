@@ -1,0 +1,17 @@
+{
+  "name": "bitcoin-node-scanner",
+  "version": "0.1.0",
+  "description": "Bitcoin node scanner that scans for BTC nodes via publicly known DNS, random IPs and user-specified IPs. Does scan peer's peers.",
+  "type": "module",
+  "main": "src/index.mts",
+  "repository": "https://github.com/OriginalEveres/bitcoin-node-scanner.git",
+  "author": "Matej Husak",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
