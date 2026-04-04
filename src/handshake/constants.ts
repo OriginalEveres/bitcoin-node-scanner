@@ -1,0 +1,2 @@
+export const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5000;
+export const FEEFILTER_WAIT_MS = 2000;
