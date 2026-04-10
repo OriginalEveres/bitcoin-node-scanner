@@ -104,7 +104,7 @@ describe(MessageReader.name, () => {
     const raw = makeMessage("ping", Buffer.from("test"));
 
     // Corrupt the checksum (bytes 20-23 in the header)
-    raw[20] ^= 0xff;
+    raw[20] = raw[20]! ^ 0xff;
 
     const valid = makeMessage("pong");
     reader.feed(Buffer.concat([raw, valid]));
