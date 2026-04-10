@@ -5,10 +5,14 @@ import {
   COMMAND_VERSION,
   COMMAND_VERACK,
   COMMAND_FEEFILTER,
+  COMMAND_GETADDR,
+  COMMAND_ADDR,
 } from "../protocol/constants.js";
 import { serializeMessage, parseHeader } from "../protocol/message.js";
 import { serializeVersion } from "../protocol/version.js";
 import { serializeFeeFilter } from "../protocol/feefilter.js";
+import { ipToBytes } from "../protocol/ip.js";
+import { encodeVarInt } from "../protocol/varInt.js";
 
 export type MockBehavior =
   | "normal"
@@ -17,6 +21,13 @@ export type MockBehavior =
   | "silent"
   | "fragmented";
 
+export type MockAddrEntry = {
+  ip: string;
+  port: number;
+  services?: bigint;
+  timestamp?: number;
+};
+
 export type MockNodeOptions = {
   behavior: MockBehavior;
   protocolVersion?: number;
@@ -24,6 +35,7 @@ export type MockNodeOptions = {
   startHeight?: number;
   services?: bigint;
   feeFilterSatPerKb?: bigint;
+  addrResponses?: MockAddrEntry[];
 };
 
 /**
@@ -39,84 +51,105 @@ export async function createMockBitcoinNode(
     socket.on("data", (chunk) => {
       buf = Buffer.concat([buf, chunk]);
 
-      // Try to read a complete message
-      if (buf.length < HEADER_SIZE) return;
+      // Process all complete messages in the buffer
+      while (buf.length >= HEADER_SIZE) {
+        const header = parseHeader(buf, MAINNET_MAGIC);
+        if (!header) break;
 
-      const header = parseHeader(buf, MAINNET_MAGIC);
-      if (!header) return;
+        const totalLen = HEADER_SIZE + header.payloadLength;
+        if (buf.length < totalLen) break;
 
-      const totalLen = HEADER_SIZE + header.payloadLength;
-      if (buf.length < totalLen) return;
+        const payload = buf.subarray(HEADER_SIZE, totalLen);
+        buf = buf.subarray(totalLen);
 
-      const payload = buf.subarray(HEADER_SIZE, totalLen);
-      buf = buf.subarray(totalLen);
+        if (header.command === COMMAND_VERSION) {
+          if (opts.behavior === "silent") return;
 
-      if (header.command === COMMAND_VERSION) {
-        if (opts.behavior === "silent") return;
-
-        // Send our version response
-        const versionPayload = serializeVersion({
-          protocolVersion: opts.protocolVersion ?? 70016,
-          services: { raw: opts.services ?? 9n },
-          timestamp: BigInt(Math.floor(Date.now() / 1000)),
-          receiverServices: { raw: 0n },
-          receiverIp: "127.0.0.1",
-          receiverPort: 0,
-          senderServices: { raw: opts.services ?? 9n },
-          senderIp: "127.0.0.1",
-          senderPort: 0,
-          nonce: 99999n,
-          userAgent: opts.userAgent ?? "/MockNode:1.0.0/",
-          startHeight: opts.startHeight ?? 850000,
-          relay: true,
-        });
-
-        const versionMsg = serializeMessage(
-          COMMAND_VERSION,
-          versionPayload,
-          MAINNET_MAGIC,
-        );
-        const verackMsg = serializeMessage(
-          COMMAND_VERACK,
-          Buffer.alloc(0),
-          MAINNET_MAGIC,
-        );
-
-        if (opts.behavior === "fragmented") {
-          // Send version in small chunks
-          const allData = Buffer.concat([
-            versionMsg,
-            ...(opts.behavior === "fragmented" ? [verackMsg] : []),
-          ]);
-          sendFragmented(socket, allData);
-        } else {
-          socket.write(versionMsg);
-
-          if (opts.behavior !== "no-verack") {
-            socket.write(verackMsg);
-          }
-        }
-
-        // Send feefilter if applicable
-        if (
-          opts.behavior !== "no-verack" &&
-          opts.behavior !== "no-feefilter" &&
-          opts.behavior !== "fragmented"
-        ) {
-          const feePayload = serializeFeeFilter({
-            satPerKb: opts.feeFilterSatPerKb ?? 1000n,
+          // Send our version response
+          const versionPayload = serializeVersion({
+            protocolVersion: opts.protocolVersion ?? 70016,
+            services: { raw: opts.services ?? 9n },
+            timestamp: BigInt(Math.floor(Date.now() / 1000)),
+            receiverServices: { raw: 0n },
+            receiverIp: "127.0.0.1",
+            receiverPort: 0,
+            senderServices: { raw: opts.services ?? 9n },
+            senderIp: "127.0.0.1",
+            senderPort: 0,
+            nonce: 99999n,
+            userAgent: opts.userAgent ?? "/MockNode:1.0.0/",
+            startHeight: opts.startHeight ?? 850000,
+            relay: true,
           });
-          const feeMsg = serializeMessage(
-            COMMAND_FEEFILTER,
-            feePayload,
+
+          const versionMsg = serializeMessage(
+            COMMAND_VERSION,
+            versionPayload,
             MAINNET_MAGIC,
           );
-          // Small delay to simulate real-world timing
-          setTimeout(() => {
-            if (!socket.destroyed) {
-              socket.write(feeMsg);
+          const verackMsg = serializeMessage(
+            COMMAND_VERACK,
+            Buffer.alloc(0),
+            MAINNET_MAGIC,
+          );
+
+          if (opts.behavior === "fragmented") {
+            // Send version in small chunks
+            const allData = Buffer.concat([
+              versionMsg,
+              ...(opts.behavior === "fragmented" ? [verackMsg] : []),
+            ]);
+            sendFragmented(socket, allData);
+          } else {
+            socket.write(versionMsg);
+
+            if (opts.behavior !== "no-verack") {
+              socket.write(verackMsg);
             }
-          }, 50);
+          }
+
+          // Send feefilter if applicable
+          if (
+            opts.behavior !== "no-verack" &&
+            opts.behavior !== "no-feefilter" &&
+            opts.behavior !== "fragmented"
+          ) {
+            const feePayload = serializeFeeFilter({
+              satPerKb: opts.feeFilterSatPerKb ?? 1000n,
+            });
+            const feeMsg = serializeMessage(
+              COMMAND_FEEFILTER,
+              feePayload,
+              MAINNET_MAGIC,
+            );
+            // Small delay to simulate real-world timing
+            setTimeout(() => {
+              if (!socket.destroyed) {
+                socket.write(feeMsg);
+              }
+            }, 50);
+          }
+        } else if (header.command === COMMAND_GETADDR && opts.addrResponses) {
+          const entries = opts.addrResponses;
+          const countBuf = encodeVarInt(entries.length);
+          const entryBufs: Buffer[] = [countBuf];
+
+          for (const entry of entries) {
+            const entryBuf = Buffer.alloc(30);
+            // timestamp (4 bytes LE)
+            entryBuf.writeUInt32LE(entry.timestamp ?? Math.floor(Date.now() / 1000), 0);
+            // services (8 bytes LE)
+            entryBuf.writeBigUInt64LE(entry.services ?? 1n, 4);
+            // ip (16 bytes)
+            ipToBytes(entry.ip).copy(entryBuf, 12);
+            // port (2 bytes BE)
+            entryBuf.writeUInt16BE(entry.port, 28);
+            entryBufs.push(entryBuf);
+          }
+
+          const addrPayload = Buffer.concat(entryBufs);
+          const addrMsg = serializeMessage(COMMAND_ADDR, addrPayload, MAINNET_MAGIC);
+          socket.write(addrMsg);
         }
       }
     });
