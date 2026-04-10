@@ -35,3 +35,9 @@ export type { VersionMessage } from "./protocol/version.js";
 
 // Domain types
 export type { Node, NetAddr } from "./node.js";
+
+// Crawler
+export { crawl, crawlStream } from "./crawler/crawler.js";
+export type { CrawlerOptions, CrawlResult } from "./crawler/crawler.js";
+export { resolveDnsSeeds } from "./crawler/resolveDnsSeeds.js";
+export type { AddrEntry } from "./protocol/addr.js";
