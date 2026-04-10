@@ -7,3 +7,5 @@ export const PROTOCOL_VERSION = 70016;
 export const COMMAND_VERSION = "version";
 export const COMMAND_VERACK = "verack";
 export const COMMAND_FEEFILTER = "feefilter";
+export const COMMAND_GETADDR = "getaddr";
+export const COMMAND_ADDR = "addr";
