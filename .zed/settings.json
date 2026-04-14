@@ -1,0 +1,11 @@
+{
+	"formatter": {
+		"external": {
+			"command": "npx",
+			"arguments": ["prettier", "--stdin-filepath", "{buffer_path}"]
+		}
+	},
+	"format_on_save": "on",
+	"tab_size": 4,
+	"hard_tabs": true
+}

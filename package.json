@@ -15,11 +15,20 @@
     "build": "tsc",
     "type-check": "tsc --noEmit",
     "test": "node --import tsx/esm --test src/**/tests/*.test.ts",
-    "crawl": "tsx src/cli/crawl.ts"
+    "crawl": "tsx src/cli/crawl.ts",
+"lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\""
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^24.10.1",
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.2",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.58.2"
   }
 }
