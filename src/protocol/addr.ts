@@ -4,8 +4,8 @@ import { bytesToIp } from "./ip.js";
 import { decodeVarInt } from "./varInt.js";
 
 export type AddrEntry = NetAddr & {
-  timestamp: number;
-  services: Services;
+	timestamp: number;
+	services: Services;
 };
 
 const ADDR_ENTRY_SIZE = 30; // 4 timestamp + 8 services + 16 ip + 2 port
@@ -15,28 +15,28 @@ const ADDR_ENTRY_SIZE = 30; // 4 timestamp + 8 services + 16 ip + 2 port
  * Format: varint count, then count × 30-byte entries.
  */
 export function parseAddr(payload: Buffer): AddrEntry[] {
-  const { value: count, bytesRead } = decodeVarInt(payload, 0);
-  let offset = bytesRead;
+	const { value: count, bytesRead } = decodeVarInt(payload, 0);
+	let offset = bytesRead;
 
-  const entries: AddrEntry[] = [];
+	const entries: AddrEntry[] = [];
 
-  for (let i = 0; i < count; i++) {
-    if (offset + ADDR_ENTRY_SIZE > payload.length) break;
+	for (let i = 0; i < count; i++) {
+		if (offset + ADDR_ENTRY_SIZE > payload.length) break;
 
-    const timestamp = payload.readUInt32LE(offset);
-    offset += 4;
+		const timestamp = payload.readUInt32LE(offset);
+		offset += 4;
 
-    const services: Services = { raw: payload.readBigUInt64LE(offset) };
-    offset += 8;
+		const services: Services = { raw: payload.readBigUInt64LE(offset) };
+		offset += 8;
 
-    const ip = bytesToIp(payload, offset);
-    offset += 16;
+		const ip = bytesToIp(payload, offset);
+		offset += 16;
 
-    const port = payload.readUInt16BE(offset);
-    offset += 2;
+		const port = payload.readUInt16BE(offset);
+		offset += 2;
 
-    entries.push({ timestamp, services, ip, port });
-  }
+		entries.push({ timestamp, services, ip, port });
+	}
 
-  return entries;
+	return entries;
 }

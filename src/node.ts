@@ -1,8 +1,8 @@
 export type NetAddr = {
-  ip: string;
-  port: number;
+	ip: string;
+	port: number;
 };
 
 export type Node = NetAddr & {
-  label?: string;
+	label?: string;
 };

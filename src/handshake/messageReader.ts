@@ -2,8 +2,8 @@ import { MAINNET_MAGIC, HEADER_SIZE } from "../protocol/constants.js";
 import { parseHeader, computeChecksum } from "../protocol/message.js";
 
 export type ParsedMessage = {
-  command: string;
-  payload: Buffer;
+	command: string;
+	payload: Buffer;
 };
 
 /**
@@ -12,44 +12,44 @@ export type ParsedMessage = {
  * multiple messages may arrive in a single chunk.
  */
 export class MessageReader {
-  private buf = Buffer.alloc(0);
+	private buf = Buffer.alloc(0);
 
-  feed(chunk: Buffer): void {
-    this.buf = Buffer.concat([this.buf, chunk]);
-  }
+	feed(chunk: Buffer): void {
+		this.buf = Buffer.concat([this.buf, chunk]);
+	}
 
-  nextMessage(): ParsedMessage | undefined {
-    // Need at least a header
-    if (this.buf.length < HEADER_SIZE) {
-      return undefined;
-    }
+	nextMessage(): ParsedMessage | undefined {
+		// Need at least a header
+		if (this.buf.length < HEADER_SIZE) {
+			return undefined;
+		}
 
-    const header = parseHeader(this.buf, MAINNET_MAGIC);
-    if (!header) {
-      // Bad magic — skip one byte and try again
-      this.buf = this.buf.subarray(1);
-      return undefined;
-    }
+		const header = parseHeader(this.buf, MAINNET_MAGIC);
+		if (!header) {
+			// Bad magic — skip one byte and try again
+			this.buf = this.buf.subarray(1);
+			return undefined;
+		}
 
-    const totalLen = HEADER_SIZE + header.payloadLength;
-    if (this.buf.length < totalLen) {
-      // Incomplete message, wait for more data
-      return undefined;
-    }
+		const totalLen = HEADER_SIZE + header.payloadLength;
+		if (this.buf.length < totalLen) {
+			// Incomplete message, wait for more data
+			return undefined;
+		}
 
-    const payload = Buffer.from(this.buf.subarray(HEADER_SIZE, totalLen));
+		const payload = Buffer.from(this.buf.subarray(HEADER_SIZE, totalLen));
 
-    // Validate checksum
-    const expectedChecksum = computeChecksum(payload);
-    if (!header.checksum.equals(expectedChecksum)) {
-      // Bad checksum — skip this header and try again
-      this.buf = this.buf.subarray(1);
-      return undefined;
-    }
+		// Validate checksum
+		const expectedChecksum = computeChecksum(payload);
+		if (!header.checksum.equals(expectedChecksum)) {
+			// Bad checksum — skip this header and try again
+			this.buf = this.buf.subarray(1);
+			return undefined;
+		}
 
-    // Consume the message from the buffer
-    this.buf = this.buf.subarray(totalLen);
+		// Consume the message from the buffer
+		this.buf = this.buf.subarray(totalLen);
 
-    return { command: header.command, payload };
-  }
+		return { command: header.command, payload };
+	}
 }
