@@ -9,6 +9,7 @@ import { performHandshake } from "../handshake/handshake.js";
 import { requestAddrs } from "./getaddr.js";
 import { resolveDnsSeeds } from "./resolveDnsSeeds.js";
 import { createAsyncChannel } from "./asyncChannel.js";
+import { generateRandomIp } from "../random-ip/randomIp.js";
 import {
   MAX_CONCURRENT,
   MAX_NODES,
@@ -59,6 +60,8 @@ export type CrawlerOptions = {
    * {@link RESULT_BUFFER_SIZE}.
    */
   resultBufferSize?: number;
+  /** Enable random IPv4 scanning. Number of random IPs to probe, or true for unlimited. */
+  randomScan?: number | boolean;
 };
 
 export type CrawlResult = {
@@ -106,6 +109,7 @@ export function crawlStream(options: CrawlerOptions = {}): {
   let activeCount = 0;
   let queueIdx = 0;
   let aborted = signal?.aborted ?? false;
+  let randomFeeding = false;
 
   const channel = createAsyncChannel<NodeScanResult>(resultBufferSize, signal);
 
@@ -199,10 +203,14 @@ export function crawlStream(options: CrawlerOptions = {}): {
     }
   }
 
+  function isDone(): boolean {
+    return activeCount === 0 && queueIdx >= queue.length && !randomFeeding;
+  }
+
   function onWorkerDone(): void {
     activeCount--;
     trySpawn();
-    if (activeCount === 0 && (queueIdx >= queue.length || aborted)) {
+    if (isDone() || aborted) {
       channel.close();
     }
   }
@@ -216,7 +224,7 @@ export function crawlStream(options: CrawlerOptions = {}): {
       processNode(entry).then(onWorkerDone, onWorkerDone);
     }
 
-    if (activeCount === 0 && queueIdx >= queue.length) {
+    if (isDone()) {
       channel.close();
     }
   }
@@ -247,6 +255,36 @@ export function crawlStream(options: CrawlerOptions = {}): {
       for (const addr of options.manualAddresses) {
         enqueue(addr.ip, addr.port, "manual", 0);
       }
+    }
+
+    // Continuously feed random IPs into the queue, keeping it topped up.
+    if (options.randomScan) {
+      const limit =
+        typeof options.randomScan === "number"
+          ? options.randomScan
+          : Infinity;
+      let generated = 0;
+      randomFeeding = true;
+
+      const feedRandom = () => {
+        const pending = queue.length - queueIdx;
+        while (
+          !aborted &&
+          generated < limit &&
+          seen.size < maxNodes &&
+          pending + generated - queueIdx < maxConcurrent * 2
+        ) {
+          enqueue(generateRandomIp(), 8333, "random", 0);
+          generated++;
+        }
+        trySpawn();
+        if (!aborted && generated < limit && seen.size < maxNodes) {
+          setTimeout(feedRandom, 50);
+        } else {
+          randomFeeding = false;
+        }
+      };
+      feedRandom();
     }
 
     trySpawn();

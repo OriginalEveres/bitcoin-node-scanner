@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import * as fs from "node:fs";
 import { parseArgs } from "node:util";
 import { crawlStream } from "../crawler/crawler.js";
 import type { CrawlerOptions } from "../crawler/crawler.js";
@@ -26,7 +27,9 @@ Options:
   --getaddr-timeout <ms>  getaddr response timeout (default: 10000)
   --manual <ip[:port]>    Add a manual seed (repeatable)
   --skip-dns              Skip DNS seed resolution
-  --json                  Output results as JSON
+  --random <n>            Probe <n> random public IPv4 addresses on port 8333
+  --out <path>            Write results as JSONL to a file (one JSON object per line)
+  --json                  Output results as JSON to stdout
   --help, -h              Show this help
 `);
 }
@@ -42,6 +45,8 @@ async function main(): Promise<void> {
       "getaddr-timeout": { type: "string" },
       manual: { type: "string", multiple: true },
       "skip-dns": { type: "boolean" },
+      random: { type: "string" },
+      out: { type: "string" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
@@ -65,6 +70,7 @@ async function main(): Promise<void> {
   if (values["getaddr-timeout"])
     opts.getaddrTimeoutMs = parseInt(values["getaddr-timeout"], 10);
   if (values["skip-dns"]) opts.skipDnsSeeds = true;
+  if (values.random) opts.randomScan = parseInt(values.random, 10);
 
   // Allow Ctrl+C to abort gracefully
   const abortController = new AbortController();
@@ -73,39 +79,67 @@ async function main(): Promise<void> {
     abortController.abort();
   });
 
+  const outFile = values.out
+    ? fs.createWriteStream(values.out, { flags: "a" })
+    : null;
+
+  if (outFile) {
+    console.error(`Writing results to ${values.out}`);
+  }
+
+  const jsonReplacer = (_k: string, v: unknown) =>
+    typeof v === "bigint" ? v.toString() : v;
+
   console.error("Starting crawl...");
   const start = Date.now();
 
   let scanned = 0;
   let reachableCount = 0;
 
-  const { results: stream } = crawlStream({ ...opts, signal: abortController.signal });
+  const { results: stream } = crawlStream({
+    ...opts,
+    signal: abortController.signal,
+  });
 
-  if (values.json) {
-    process.stdout.write("[\n");
-    let first = true;
-    for await (const r of stream) {
-      scanned++;
-      if (r.reachable && r.peerInfo) reachableCount++;
-      const json = JSON.stringify(r, (_k, v) =>
-        typeof v === "bigint" ? v.toString() : v,
-      );
-      process.stdout.write((first ? "" : ",\n") + "  " + json);
-      first = false;
-    }
-    process.stdout.write("\n]\n");
-  } else {
-    for await (const r of stream) {
-      scanned++;
-      if (r.reachable && r.peerInfo) {
-        reachableCount++;
-        const ua = r.peerInfo.userAgent ?? "?";
-        const h = r.peerInfo.startHeight ?? "?";
-        console.log(
-          `${r.ip}:${r.port}\t${r.latencyMs?.toFixed(0)}ms\t${h}\t${ua}`,
-        );
+  const useJson = values.json || false;
+  const collected: string[] = [];
+
+  if (useJson) process.stdout.write("[\n");
+
+  let first = true;
+  for await (const r of stream) {
+    scanned++;
+    if (r.reachable && r.peerInfo) reachableCount++;
+
+    if (outFile || useJson) {
+      const json = JSON.stringify(r, jsonReplacer);
+      if (useJson) {
+        process.stdout.write((first ? "" : ",\n") + "  " + json);
       }
+      if (outFile) collected.push(json);
     }
+
+    if (!useJson && r.reachable && r.peerInfo) {
+      const ua = r.peerInfo.userAgent ?? "?";
+      const h = r.peerInfo.startHeight ?? "?";
+      console.log(
+        `${r.ip}:${r.port}\t${r.latencyMs?.toFixed(0)}ms\t${h}\t${ua}`,
+      );
+    }
+    first = false;
+  }
+
+  if (useJson) process.stdout.write("\n]\n");
+
+  if (outFile) {
+    if (useJson) {
+      outFile.write("[\n");
+      outFile.write(collected.map((j) => "  " + j).join(",\n"));
+      outFile.write("\n]\n");
+    } else {
+      for (const json of collected) outFile.write(json + "\n");
+    }
+    outFile.end();
   }
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);

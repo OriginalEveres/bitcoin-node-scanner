@@ -22,3 +22,9 @@ export const HANDSHAKE_TIMEOUT_MS = 5_000;
  * This provides backpressure so a slow consumer doesn't cause unbounded memory growth.
  */
 export const RESULT_BUFFER_SIZE = 256;
+
+/**
+ * How many random IPs to keep queued ahead of the worker pool.
+ * The feeder tops up to `maxConcurrent * 2` pending entries.
+ */
+export const RANDOM_QUEUE_REFILL = 100;
