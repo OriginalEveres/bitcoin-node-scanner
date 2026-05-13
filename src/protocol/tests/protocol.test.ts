@@ -8,7 +8,6 @@ import {
 	NODE_WITNESS,
 	NODE_BLOOM,
 	NODE_COMPACT_FILTERS,
-	NODE_NETWORK_LIMITED,
 } from "../services.js";
 import { parseFeeFilter, serializeFeeFilter } from "../feefilter.js";
 import { computeChecksum, serializeMessage, parseHeader } from "../message.js";

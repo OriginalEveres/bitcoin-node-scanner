@@ -3,7 +3,7 @@
  * Returns false for private, reserved, loopback, multicast, and other
  * non-routable ranges.
  */
-export function isRoutable(a: number, b: number, c: number, d: number): boolean {
+export function isRoutable(a: number, b: number, c: number, _d: number): boolean {
 	if (a === 0) return false; // 0.0.0.0/8
 	if (a === 10) return false; // 10.0.0.0/8
 	if (a === 100 && b >= 64 && b <= 127) return false; // 100.64.0.0/10

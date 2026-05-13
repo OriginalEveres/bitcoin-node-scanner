@@ -54,7 +54,6 @@ export async function createMockBitcoinNode(
 				const totalLen = HEADER_SIZE + header.payloadLength;
 				if (buf.length < totalLen) break;
 
-				const payload = buf.subarray(HEADER_SIZE, totalLen);
 				buf = buf.subarray(totalLen);
 
 				if (header.command === COMMAND_VERSION) {
