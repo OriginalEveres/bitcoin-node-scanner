@@ -3,13 +3,40 @@
 	"version": "0.1.0",
 	"description": "Bitcoin node scanner that scans for BTC nodes via publicly known DNS, random IPs and user-specified IPs. Does scan peer's peers.",
 	"type": "module",
-	"main": "src/index.mts",
-	"repository": "https://github.com/OriginalEveres/bitcoin-node-scanner.git",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/OriginalEveres/bitcoin-node-scanner.git"
+	},
+	"bugs": {
+		"url": "https://github.com/OriginalEveres/bitcoin-node-scanner/issues"
+	},
+	"homepage": "https://github.com/OriginalEveres/bitcoin-node-scanner#readme",
+	"keywords": [
+		"bitcoin",
+		"btc",
+		"p2p",
+		"node",
+		"scanner",
+		"crawler",
+		"network",
+		"dns-seed",
+		"getaddr"
+	],
 	"author": "Matej Husak",
 	"license": "MIT",
-	"bin": {
-		"btc-crawl": "src/cli/crawl.ts"
+	"engines": {
+		"node": ">=22"
 	},
+	"bin": {
+		"btc-crawl": "dist/cli/crawl.js"
+	},
+	"files": [
+		"dist",
+		"LICENSE",
+		"README.md"
+	],
 	"scripts": {
 		"dev": "tsx watch src/index.ts",
 		"build": "tsc",
@@ -19,7 +46,8 @@
 		"lint": "eslint src/",
 		"lint:fix": "eslint src/ --fix",
 		"format": "prettier --write \"src/**/*.ts\"",
-		"format:check": "prettier --check \"src/**/*.ts\""
+		"format:check": "prettier --check \"src/**/*.ts\"",
+		"prepublishOnly": "yarn build"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
