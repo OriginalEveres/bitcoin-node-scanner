@@ -1,12 +1,14 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
 jobs:
   build:
-    name: Build & Type-check
+    name: Lint, Test & Build
     runs-on: ubuntu-latest
 
     steps:
@@ -17,13 +19,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
+          cache: "yarn"
 
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --frozen-lockfile
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Format check
+        run: yarn format:check
 
       - name: Type-check
-        run: npm run type-check
+        run: yarn type-check
+
+      - name: Test
+        run: yarn test
 
       - name: Build
-        run: npm run build
+        run: yarn build
