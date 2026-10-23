@@ -14,7 +14,7 @@ import { serializeMessage, parseHeader } from "../protocol/message.js";
 import { serializeVersion } from "../protocol/version.js";
 import { serializeFeeFilter } from "../protocol/feefilter.js";
 import { ipToBytes } from "../protocol/ip.js";
-import { encodeVarInt } from "../protocol/varInt.js";
+import { encodeVarInt, encodeVarIntBigInt } from "../protocol/varInt.js";
 
 export type MockBehavior = "normal" | "no-verack" | "no-feefilter" | "silent" | "fragmented";
 
@@ -202,7 +202,7 @@ export function buildAddrV2Payload(entries: MockAddrV2Entry[]): Buffer {
 		port.writeUInt16BE(entry.port, 0);
 		parts.push(
 			time,
-			encodeVarInt(Number(entry.services ?? 1n)),
+			encodeVarIntBigInt(entry.services ?? 1n),
 			Buffer.from([entry.networkId]),
 			encodeVarInt(entry.address.length),
 			entry.address,
