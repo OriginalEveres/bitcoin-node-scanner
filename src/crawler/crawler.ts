@@ -168,7 +168,7 @@ export function crawlStream(options: CrawlerOptions = {}): {
 	const seen = new Set<string>();
 	// TODO: Old queue entries (indices < pool.next) are never freed. At current
 	// scale (~10k nodes) this is negligible. Consider a circular buffer if maxNodes grows.
-	const clearnet: WorkerPool = {
+	const clearnetPool: WorkerPool = {
 		queue: [],
 		next: 0,
 		active: 0,
@@ -197,7 +197,7 @@ export function crawlStream(options: CrawlerOptions = {}): {
 		if (seen.has(key)) return;
 		if (seen.size >= maxNodes) return;
 		seen.add(key);
-		const pool = addr.network === "tor" && canDial(addr.network) ? torPool : clearnet;
+		const pool = addr.network === "tor" && canDial(addr.network) ? torPool : clearnetPool;
 		pool.queue.push({ ...addr, source, depth });
 	}
 
@@ -283,9 +283,9 @@ export function crawlStream(options: CrawlerOptions = {}): {
 
 	function isDone(): boolean {
 		return (
-			clearnet.active === 0 &&
+			clearnetPool.active === 0 &&
 			torPool.active === 0 &&
-			!hasPending(clearnet) &&
+			!hasPending(clearnetPool) &&
 			!hasPending(torPool) &&
 			!randomFeeding
 		);
@@ -323,7 +323,7 @@ export function crawlStream(options: CrawlerOptions = {}): {
 			void finish();
 			return;
 		}
-		spawnFrom(clearnet);
+		spawnFrom(clearnetPool);
 		if (socksPort !== undefined) spawnFrom(torPool);
 
 		if (isDone()) {
@@ -383,12 +383,12 @@ export function crawlStream(options: CrawlerOptions = {}): {
 			randomFeeding = true;
 
 			const feedRandom = () => {
-				const pending = clearnet.queue.length - clearnet.next;
+				const pending = clearnetPool.queue.length - clearnetPool.next;
 				while (
 					!aborted &&
 					generated < limit &&
 					seen.size < maxNodes &&
-					pending + generated - clearnet.next < clearnet.max * 2
+					pending + generated - clearnetPool.next < clearnetPool.max * 2
 				) {
 					enqueue({ ip: generateRandomIp(), port: 8333 }, "random", 0);
 					generated++;

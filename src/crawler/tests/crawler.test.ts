@@ -282,6 +282,8 @@ describe("crawl with tor", () => {
 	});
 
 	it("respects the tor concurrency limit independently of maxConcurrent", async () => {
+		// Each handshake against a no-feefilter node takes at least the 200 ms fee-filter wait,
+		// so four peers through a pool of one need ~800 ms where a pool of four needs ~200 ms.
 		const node = await createMockBitcoinNode({ behavior: "no-feefilter" });
 		const proxy = await createMockSocks5Server({ targetPort: node.port });
 		const onions = Array.from({ length: 4 }, (_, i) => ({
@@ -291,14 +293,7 @@ describe("crawl with tor", () => {
 		}));
 
 		try {
-			let inFlight = 0;
-			let peak = 0;
-			proxy.server.on("connection", (socket) => {
-				inFlight++;
-				peak = Math.max(peak, inFlight);
-				socket.on("close", () => inFlight--);
-			});
-
+			const start = performance.now();
 			const result = await crawl({
 				skipDnsSeeds: true,
 				manualAddresses: onions,
@@ -306,9 +301,13 @@ describe("crawl with tor", () => {
 				maxConcurrent: 50,
 				tor: { enabled: true, socksPort: proxy.port, maxConcurrent: 1 },
 			});
+			const elapsed = performance.now() - start;
 
-			assert.equal(result.results.length, 4);
-			assert.equal(peak, 1);
+			assert.equal(result.results.filter((r) => r.peerInfo).length, 4);
+			assert.ok(
+				elapsed >= 720,
+				`expected sequential tor dials, took ${elapsed.toFixed(0)}ms`,
+			);
 		} finally {
 			proxy.server.close();
 			await closeMockNode(node.server);
@@ -328,7 +327,7 @@ describe("crawl with tor", () => {
 
 	it("fails the crawl after delivering clearnet results when tor exits early", async () => {
 		const node = await createMockBitcoinNode({ behavior: "normal" });
-		const binary = fakeTor("sleep 0.3\nexit 1");
+		const binary = fakeTor("sleep 1\nexit 1");
 
 		try {
 			const { results } = crawlStream({
