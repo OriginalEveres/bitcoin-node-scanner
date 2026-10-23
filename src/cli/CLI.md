@@ -23,6 +23,7 @@ btc-crawl [options]
 | `--manual <ip[:port]>` | Add a manual seed address (repeatable) | — |
 | `--skip-dns` | Skip DNS seed resolution | false |
 | `--random <n>` | Probe `n` random public IPv4 addresses on port 8333 | — |
+| `--tor` | Start the bundled Tor client and dial `.onion` peers; requires `yarn fetch-tor` once | false |
 | `--out <path>` | Write results as JSONL to a file (appends) | — |
 | `--json` | Output results as a JSON array to stdout | false |
 | `--help`, `-h` | Show help | — |
@@ -51,6 +52,13 @@ tsx src/cli/crawl.ts --out results.jsonl
 
 ```bash
 tsx src/cli/crawl.ts --skip-dns --random 10000 --connect-timeout 1500 --max-concurrent 200
+```
+
+### Crawl including Tor onion peers
+
+```bash
+yarn fetch-tor   # once per machine; downloads and verifies the Tor Expert Bundle
+tsx src/cli/crawl.ts --tor
 ```
 
 ### JSON output piped to jq

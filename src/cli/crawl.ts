@@ -12,7 +12,7 @@ function parseManual(values: string[] | undefined): NetAddr[] {
 		const [ip, portStr] = v.split(":");
 		if (!ip) throw new Error(`Invalid --manual value: ${v}`);
 		const port = portStr ? parseInt(portStr, 10) : 8333;
-		return { ip, port };
+		return ip.endsWith(".onion") ? { ip, port, network: "tor" } : { ip, port };
 	});
 }
 
@@ -29,6 +29,7 @@ Options:
   --manual <ip[:port]>    Add a manual seed (repeatable)
   --skip-dns              Skip DNS seed resolution
   --random <n>            Probe <n> random public IPv4 addresses on port 8333
+  --tor                   Start the bundled Tor client and dial .onion peers (run yarn fetch-tor first)
   --out <path>            Write results as JSONL to a file (one JSON object per line)
   --json                  Output results as JSON to stdout
   --help, -h              Show this help
@@ -47,6 +48,7 @@ async function main(): Promise<void> {
 			manual: { type: "string", multiple: true },
 			"skip-dns": { type: "boolean" },
 			random: { type: "string" },
+			tor: { type: "boolean" },
 			out: { type: "string" },
 			json: { type: "boolean" },
 			help: { type: "boolean", short: "h" },
@@ -69,6 +71,7 @@ async function main(): Promise<void> {
 	if (values["getaddr-timeout"]) opts.getaddrTimeoutMs = parseInt(values["getaddr-timeout"], 10);
 	if (values["skip-dns"]) opts.skipDnsSeeds = true;
 	if (values.random) opts.randomScan = parseInt(values.random, 10);
+	if (values.tor) opts.tor = { enabled: true };
 
 	// Allow Ctrl+C to abort gracefully
 	const abortController = new AbortController();
@@ -88,8 +91,11 @@ async function main(): Promise<void> {
 	console.error("Starting crawl...");
 	const start = Date.now();
 
-	let scanned = 0;
-	let reachableCount = 0;
+	const counts = { scanned: { clearnet: 0, tor: 0 }, reachable: { clearnet: 0, tor: 0 } };
+	const describe = (c: { clearnet: number; tor: number }) =>
+		opts.tor
+			? `${c.clearnet + c.tor} (clearnet ${c.clearnet}, tor ${c.tor})`
+			: String(c.clearnet + c.tor);
 
 	const { results: stream } = crawlStream({
 		...opts,
@@ -103,8 +109,9 @@ async function main(): Promise<void> {
 
 	let first = true;
 	for await (const r of stream) {
-		scanned++;
-		if (r.reachable && r.peerInfo) reachableCount++;
+		const net = r.network === "tor" ? "tor" : "clearnet";
+		counts.scanned[net]++;
+		if (r.reachable && r.peerInfo) counts.reachable[net]++;
 
 		if (outFile || useJson) {
 			const json = JSON.stringify(r, jsonReplacer);
@@ -137,8 +144,8 @@ async function main(): Promise<void> {
 
 	const elapsed = ((Date.now() - start) / 1000).toFixed(1);
 	console.error(`\nDone in ${elapsed}s`);
-	console.error(`  scanned:   ${scanned}`);
-	console.error(`  reachable: ${reachableCount}`);
+	console.error(`  scanned:   ${describe(counts.scanned)}`);
+	console.error(`  reachable: ${describe(counts.reachable)}`);
 }
 
 main().catch((err) => {

@@ -35,6 +35,9 @@ export type { Node, NetAddr, Network } from "./node.js";
 
 // Crawler
 export { crawl, crawlStream } from "./crawler/crawler.js";
-export type { CrawlerOptions, CrawlResult } from "./crawler/crawler.js";
+export type { CrawlerOptions, CrawlResult, TorOptions } from "./crawler/crawler.js";
 export { resolveDnsSeeds } from "./crawler/resolveDnsSeeds.js";
 export type { AddrEntry } from "./protocol/addr.js";
+
+// Tor
+export { fetchTor } from "./tor/fetchTor.js";

@@ -28,6 +28,10 @@ aren't obvious from reading the code.
   from tests.
 - `local-scripts/` — gitignored. Put one-off scripts, scratch experiments,
   and personal tools here. Excluded from `tsconfig`.
+- `src/tor/` — bundled Tor support (fetch script, process supervisor, SOCKS5
+  client) plus `mockSocks5Server.ts` for tests. `vendor/tor/` is gitignored
+  and populated by `yarn fetch-tor`; tests must never depend on it or start a
+  real `tor`.
 
 ## Style
 

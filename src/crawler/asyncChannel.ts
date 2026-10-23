@@ -3,11 +3,13 @@
  *
  * Producers call {@link push} to enqueue items — if the buffer is full they
  * suspend until the consumer drains a slot. The consumer iterates with
- * `for await...of`. Call {@link close} when no more items will be produced.
+ * `for await...of`. Call {@link close} when no more items will be produced, or
+ * {@link fail} to deliver buffered items and then throw `error` to the consumer.
  */
 export type AsyncChannel<T> = {
 	push: (item: T) => Promise<void>;
 	close: () => void;
+	fail: (error: Error) => void;
 	[Symbol.asyncIterator](): AsyncIterableIterator<T>;
 };
 
@@ -17,6 +19,7 @@ export function createAsyncChannel<T>(capacity: number, signal?: AbortSignal): A
 	let consumerWaiter: (() => void) | null = null;
 	let closed = false;
 	let aborted = false;
+	let failure: Error | undefined;
 
 	function wakeConsumer(): void {
 		if (consumerWaiter) {
@@ -62,6 +65,11 @@ export function createAsyncChannel<T>(capacity: number, signal?: AbortSignal): A
 		wakeConsumer();
 	}
 
+	function fail(error: Error): void {
+		failure = error;
+		close();
+	}
+
 	async function* iterate(): AsyncIterableIterator<T> {
 		while (true) {
 			if (buffer.length > 0) {
@@ -72,6 +80,7 @@ export function createAsyncChannel<T>(capacity: number, signal?: AbortSignal): A
 			}
 			if (closed || aborted) {
 				while (buffer.length > 0) yield buffer.shift()!;
+				if (failure) throw failure;
 				return;
 			}
 			await new Promise<void>((resolve) => {
@@ -83,6 +92,7 @@ export function createAsyncChannel<T>(capacity: number, signal?: AbortSignal): A
 	return {
 		push,
 		close,
+		fail,
 		[Symbol.asyncIterator]() {
 			return iterate();
 		},

@@ -2,6 +2,10 @@ import { describe, it } from "node:test";
 import * as assert from "node:assert/strict";
 import { createMockBitcoinNode, closeMockNode } from "../../handshake/mockBitcoinNode.js";
 import { crawl, crawlStream } from "../crawler.js";
+import { createMockSocks5Server } from "../../tor/mockSocks5Server.js";
+import { fakeTor } from "../../tor/tests/fakeTor.js";
+
+const ONION = "pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion";
 
 describe("crawl", () => {
 	it("scans a single mock node with maxDepth 0", async () => {
@@ -198,6 +202,151 @@ describe("crawlStream", () => {
 			assert.equal(onion.error?.code, "SKIPPED");
 		} finally {
 			await closeMockNode(server);
+		}
+	});
+});
+
+describe("crawl with tor", () => {
+	it("dials onion peers through the SOCKS5 proxy and follows their getaddr", async () => {
+		const onionNode = await createMockBitcoinNode({
+			behavior: "normal",
+			addrV2Responses: [{ networkId: 4, address: Buffer.alloc(32, 9), port: 8333 }],
+		});
+		const proxy = await createMockSocks5Server({ targetPort: onionNode.port });
+
+		try {
+			const result = await crawl({
+				skipDnsSeeds: true,
+				manualAddresses: [{ ip: ONION, port: 8333, network: "tor" }],
+				maxDepth: 1,
+				tor: { enabled: true, socksPort: proxy.port },
+			});
+
+			assert.equal(result.results.length, 2);
+			assert.equal(result.totalDiscovered, 2);
+			for (const r of result.results) {
+				assert.equal(r.network, "tor");
+				assert.equal(r.reachable, true);
+				assert.ok(r.peerInfo);
+			}
+			assert.deepEqual(
+				proxy.requests.map((r) => r.host.endsWith(".onion")),
+				[true, true],
+			);
+			assert.equal(proxy.requests[0]!.host, ONION);
+		} finally {
+			proxy.server.close();
+			await closeMockNode(onionNode.server);
+		}
+	});
+
+	it("never routes clearnet peers through the proxy", async () => {
+		const node = await createMockBitcoinNode({ behavior: "normal" });
+		const proxy = await createMockSocks5Server({ targetPort: node.port });
+
+		try {
+			const result = await crawl({
+				skipDnsSeeds: true,
+				manualAddresses: [{ ip: "127.0.0.1", port: node.port }],
+				maxDepth: 0,
+				tor: { enabled: true, socksPort: proxy.port },
+			});
+
+			assert.equal(result.results[0]!.reachable, true);
+			assert.deepEqual(proxy.requests, []);
+		} finally {
+			proxy.server.close();
+			await closeMockNode(node.server);
+		}
+	});
+
+	it("maps SOCKS5 reply codes to scan error codes", async () => {
+		for (const [replyCode, expected] of [
+			[4, "UNREACHABLE"],
+			[5, "CONNECTION_REFUSED"],
+		] as const) {
+			const proxy = await createMockSocks5Server({ replyCode });
+			try {
+				const result = await crawl({
+					skipDnsSeeds: true,
+					manualAddresses: [{ ip: ONION, port: 8333, network: "tor" }],
+					maxDepth: 0,
+					tor: { enabled: true, socksPort: proxy.port },
+				});
+				assert.equal(result.results[0]!.reachable, false);
+				assert.equal(result.results[0]!.error?.code, expected);
+			} finally {
+				proxy.server.close();
+			}
+		}
+	});
+
+	it("respects the tor concurrency limit independently of maxConcurrent", async () => {
+		// Each handshake against a no-feefilter node takes at least the 200 ms fee-filter wait,
+		// so four peers through a pool of one need ~800 ms where a pool of four needs ~200 ms.
+		const node = await createMockBitcoinNode({ behavior: "no-feefilter" });
+		const proxy = await createMockSocks5Server({ targetPort: node.port });
+		const onions = Array.from({ length: 4 }, (_, i) => ({
+			ip: `${"a".repeat(55)}${i}.onion`,
+			port: 8333,
+			network: "tor" as const,
+		}));
+
+		try {
+			const start = performance.now();
+			const result = await crawl({
+				skipDnsSeeds: true,
+				manualAddresses: onions,
+				maxDepth: 0,
+				maxConcurrent: 50,
+				tor: { enabled: true, socksPort: proxy.port, maxConcurrent: 1 },
+			});
+			const elapsed = performance.now() - start;
+
+			assert.equal(result.results.filter((r) => r.peerInfo).length, 4);
+			assert.ok(
+				elapsed >= 720,
+				`expected sequential tor dials, took ${elapsed.toFixed(0)}ms`,
+			);
+		} finally {
+			proxy.server.close();
+			await closeMockNode(node.server);
+		}
+	});
+
+	it("fails the crawl when the tor binary is missing", async () => {
+		await assert.rejects(
+			crawl({
+				skipDnsSeeds: true,
+				manualAddresses: [{ ip: ONION, port: 8333, network: "tor" }],
+				tor: { enabled: true, binary: "/nonexistent/tor" },
+			}),
+			/Tor binary not found/,
+		);
+	});
+
+	it("fails the crawl after delivering clearnet results when tor exits early", async () => {
+		const node = await createMockBitcoinNode({ behavior: "normal" });
+		const binary = fakeTor("sleep 1\nexit 1");
+
+		try {
+			const { results } = crawlStream({
+				skipDnsSeeds: true,
+				manualAddresses: [
+					{ ip: "127.0.0.1", port: node.port },
+					{ ip: ONION, port: 8333, network: "tor" },
+				],
+				maxDepth: 0,
+				tor: { enabled: true, binary },
+			});
+
+			const seen: string[] = [];
+			await assert.rejects(async () => {
+				for await (const r of results) seen.push(r.ip);
+			}, /exited before bootstrap/);
+			assert.deepEqual(seen, ["127.0.0.1"]);
+		} finally {
+			await closeMockNode(node.server);
 		}
 	});
 });

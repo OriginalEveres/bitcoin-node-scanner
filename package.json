@@ -43,6 +43,7 @@
 		"type-check": "tsc --noEmit",
 		"test": "node --import tsx/esm --test src/**/tests/*.test.ts",
 		"crawl": "tsx src/cli/crawl.ts",
+		"fetch-tor": "tsx src/cli/fetchTor.ts",
 		"lint": "eslint src/",
 		"lint:fix": "eslint src/ --fix",
 		"format": "prettier --write \"src/**/*.ts\"",
