@@ -91,8 +91,11 @@ async function main(): Promise<void> {
 	console.error("Starting crawl...");
 	const start = Date.now();
 
-	let scanned = 0;
-	let reachableCount = 0;
+	const counts = { scanned: { clearnet: 0, tor: 0 }, reachable: { clearnet: 0, tor: 0 } };
+	const describe = (c: { clearnet: number; tor: number }) =>
+		opts.tor
+			? `${c.clearnet + c.tor} (clearnet ${c.clearnet}, tor ${c.tor})`
+			: String(c.clearnet + c.tor);
 
 	const { results: stream } = crawlStream({
 		...opts,
@@ -106,8 +109,9 @@ async function main(): Promise<void> {
 
 	let first = true;
 	for await (const r of stream) {
-		scanned++;
-		if (r.reachable && r.peerInfo) reachableCount++;
+		const net = r.network === "tor" ? "tor" : "clearnet";
+		counts.scanned[net]++;
+		if (r.reachable && r.peerInfo) counts.reachable[net]++;
 
 		if (outFile || useJson) {
 			const json = JSON.stringify(r, jsonReplacer);
@@ -140,8 +144,8 @@ async function main(): Promise<void> {
 
 	const elapsed = ((Date.now() - start) / 1000).toFixed(1);
 	console.error(`\nDone in ${elapsed}s`);
-	console.error(`  scanned:   ${scanned}`);
-	console.error(`  reachable: ${reachableCount}`);
+	console.error(`  scanned:   ${describe(counts.scanned)}`);
+	console.error(`  reachable: ${describe(counts.reachable)}`);
 }
 
 main().catch((err) => {
