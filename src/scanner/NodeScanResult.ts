@@ -5,6 +5,7 @@ export type ScanErrorCode =
 	| "CONNECTION_REFUSED"
 	| "UNREACHABLE"
 	| "HANDSHAKE_FAILED"
+	| "SKIPPED"
 	| "UNKNOWN";
 
 export type ScanError = {

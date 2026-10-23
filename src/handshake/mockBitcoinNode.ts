@@ -7,6 +7,8 @@ import {
 	COMMAND_FEEFILTER,
 	COMMAND_GETADDR,
 	COMMAND_ADDR,
+	COMMAND_SENDADDRV2,
+	COMMAND_ADDRV2,
 } from "../protocol/constants.js";
 import { serializeMessage, parseHeader } from "../protocol/message.js";
 import { serializeVersion } from "../protocol/version.js";
@@ -23,6 +25,15 @@ export type MockAddrEntry = {
 	timestamp?: number;
 };
 
+/** Raw BIP 155 entry so tests can send any network id, including unknown ones. */
+export type MockAddrV2Entry = {
+	networkId: number;
+	address: Buffer;
+	port: number;
+	services?: bigint;
+	timestamp?: number;
+};
+
 export type MockNodeOptions = {
 	behavior: MockBehavior;
 	protocolVersion?: number;
@@ -31,6 +42,10 @@ export type MockNodeOptions = {
 	services?: bigint;
 	feeFilterSatPerKb?: bigint;
 	addrResponses?: MockAddrEntry[];
+	/** Sent instead of `addrResponses` once the client has sent `sendaddrv2`. */
+	addrV2Responses?: MockAddrV2Entry[];
+	/** Called with every command received, in order. */
+	onCommand?: (command: string) => void;
 };
 
 /**
@@ -42,6 +57,7 @@ export async function createMockBitcoinNode(
 ): Promise<{ server: net.Server; port: number }> {
 	const server = net.createServer((socket) => {
 		let buf = Buffer.alloc(0);
+		let gotSendAddrV2 = false;
 
 		socket.on("data", (chunk) => {
 			buf = Buffer.concat([buf, chunk]);
@@ -55,6 +71,7 @@ export async function createMockBitcoinNode(
 				if (buf.length < totalLen) break;
 
 				buf = buf.subarray(totalLen);
+				opts.onCommand?.(header.command);
 
 				if (header.command === COMMAND_VERSION) {
 					if (opts.behavior === "silent") return;
@@ -123,6 +140,20 @@ export async function createMockBitcoinNode(
 							}
 						}, 50);
 					}
+				} else if (header.command === COMMAND_SENDADDRV2) {
+					gotSendAddrV2 = true;
+				} else if (
+					header.command === COMMAND_GETADDR &&
+					gotSendAddrV2 &&
+					opts.addrV2Responses
+				) {
+					socket.write(
+						serializeMessage(
+							COMMAND_ADDRV2,
+							buildAddrV2Payload(opts.addrV2Responses),
+							MAINNET_MAGIC,
+						),
+					);
 				} else if (header.command === COMMAND_GETADDR && opts.addrResponses) {
 					const entries = opts.addrResponses;
 					const countBuf = encodeVarInt(entries.length);
@@ -159,6 +190,27 @@ export async function createMockBitcoinNode(
 			resolve({ server, port: addr.port });
 		});
 	});
+}
+
+export function buildAddrV2Payload(entries: MockAddrV2Entry[]): Buffer {
+	const parts: Buffer[] = [encodeVarInt(entries.length)];
+
+	for (const entry of entries) {
+		const time = Buffer.alloc(4);
+		time.writeUInt32LE(entry.timestamp ?? Math.floor(Date.now() / 1000), 0);
+		const port = Buffer.alloc(2);
+		port.writeUInt16BE(entry.port, 0);
+		parts.push(
+			time,
+			encodeVarInt(Number(entry.services ?? 1n)),
+			Buffer.from([entry.networkId]),
+			encodeVarInt(entry.address.length),
+			entry.address,
+			port,
+		);
+	}
+
+	return Buffer.concat(parts);
 }
 
 function sendFragmented(socket: net.Socket, data: Buffer): void {

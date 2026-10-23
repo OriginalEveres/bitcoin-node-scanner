@@ -172,4 +172,32 @@ describe("crawlStream", () => {
 			await closeMockNode(server);
 		}
 	});
+
+	it("enqueues onion peers, reports them as skipped and counts them", async () => {
+		const { server, port } = await createMockBitcoinNode({
+			behavior: "normal",
+			addrV2Responses: [{ networkId: 4, address: Buffer.alloc(32, 7), port: 8333 }],
+		});
+
+		try {
+			const result = await crawl({
+				skipDnsSeeds: true,
+				manualAddresses: [{ ip: "127.0.0.1", port }],
+				maxDepth: 1,
+				maxConcurrent: 1,
+			});
+
+			assert.equal(result.totalDiscovered, 2);
+			assert.equal(result.results.length, 2);
+
+			const onion = result.results.find((r) => r.network === "tor");
+			assert.ok(onion);
+			assert.ok(onion.ip.endsWith(".onion"));
+			assert.equal(onion.source, "addr");
+			assert.equal(onion.reachable, false);
+			assert.equal(onion.error?.code, "SKIPPED");
+		} finally {
+			await closeMockNode(server);
+		}
+	});
 });

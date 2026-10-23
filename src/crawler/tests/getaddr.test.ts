@@ -87,4 +87,40 @@ describe("requestAddrs", () => {
 		const entries = await requestAddrs(socket, 300);
 		assert.equal(entries.length, 0);
 	});
+
+	it("receives addrv2 entries when the mock node supports it", async () => {
+		const { server, port } = await createMockBitcoinNode({
+			behavior: "normal",
+			addrResponses: [{ ip: "10.0.0.1", port: 8333 }],
+			addrV2Responses: [
+				{ networkId: 1, address: Buffer.from([10, 0, 0, 2]), port: 8333, services: 9n },
+				{ networkId: 4, address: Buffer.alloc(32, 7), port: 8333 },
+			],
+		});
+
+		try {
+			const socket = await connectTo(port);
+
+			const hsResult = await performHandshake(
+				socket,
+				{ ip: "127.0.0.1", port: 0 },
+				{ ip: "127.0.0.1", port },
+				{ handshakeTimeoutMs: 3000, feeFilterWaitMs: 200 },
+			);
+			assert.equal(hsResult.ok, true);
+
+			const entries = await requestAddrs(socket, 3000);
+
+			assert.equal(entries.length, 2);
+			assert.equal(entries[0]!.ip, "10.0.0.2");
+			assert.equal(entries[0]!.network, "ipv4");
+			assert.equal(entries[0]!.services.raw, 9n);
+			assert.equal(entries[1]!.network, "tor");
+			assert.ok(entries[1]!.ip.endsWith(".onion"));
+
+			socket.destroy();
+		} finally {
+			await closeMockNode(server);
+		}
+	});
 });

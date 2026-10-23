@@ -31,7 +31,7 @@ export type { FeeFilter } from "./protocol/feefilter.js";
 export type { VersionMessage } from "./protocol/version.js";
 
 // Domain types
-export type { Node, NetAddr } from "./node.js";
+export type { Node, NetAddr, Network } from "./node.js";
 
 // Crawler
 export { crawl, crawlStream } from "./crawler/crawler.js";
