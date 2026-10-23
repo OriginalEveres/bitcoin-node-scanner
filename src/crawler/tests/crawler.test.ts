@@ -3,9 +3,7 @@ import * as assert from "node:assert/strict";
 import { createMockBitcoinNode, closeMockNode } from "../../handshake/mockBitcoinNode.js";
 import { crawl, crawlStream } from "../crawler.js";
 import { createMockSocks5Server } from "../../tor/mockSocks5Server.js";
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+import { fakeTor } from "../../tor/tests/fakeTor.js";
 
 const ONION = "pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion";
 
@@ -330,9 +328,7 @@ describe("crawl with tor", () => {
 
 	it("fails the crawl after delivering clearnet results when tor exits early", async () => {
 		const node = await createMockBitcoinNode({ behavior: "normal" });
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-tor-"));
-		const binary = path.join(dir, "tor");
-		fs.writeFileSync(binary, "#!/bin/sh\nsleep 0.3\nexit 1\n", { mode: 0o700 });
+		const binary = fakeTor("sleep 0.3\nexit 1");
 
 		try {
 			const { results } = crawlStream({

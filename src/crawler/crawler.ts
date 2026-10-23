@@ -107,6 +107,8 @@ function hasPending(pool: WorkerPool): boolean {
 	return pool.next < pool.queue.length;
 }
 
+const UNSPECIFIED_ADDR: NetAddr = { ip: "0.0.0.0", port: 0 };
+
 function isClearnet(network?: Network): boolean {
 	return network === undefined || network === "ipv4" || network === "ipv6";
 }
@@ -186,12 +188,16 @@ export function crawlStream(options: CrawlerOptions = {}): {
 
 	const channel = createAsyncChannel<NodeScanResult>(resultBufferSize, signal);
 
+	function canDial(network?: Network): boolean {
+		return isClearnet(network) || (network === "tor" && tor !== undefined);
+	}
+
 	function enqueue(addr: NetAddr, source: DiscoverySource, depth: number): void {
 		const key = `${addr.ip}:${addr.port}`;
 		if (seen.has(key)) return;
 		if (seen.size >= maxNodes) return;
 		seen.add(key);
-		const pool = tor && addr.network === "tor" ? torPool : clearnet;
+		const pool = addr.network === "tor" && canDial(addr.network) ? torPool : clearnet;
 		pool.queue.push({ ...addr, source, depth });
 	}
 
@@ -211,7 +217,7 @@ export function crawlStream(options: CrawlerOptions = {}): {
 		const { source, depth, ...addr } = entry;
 		const { ip, port, network } = addr;
 
-		if (!isClearnet(network) && !(network === "tor" && tor)) {
+		if (!canDial(network)) {
 			await channel.push({
 				...addr,
 				source,
@@ -228,14 +234,12 @@ export function crawlStream(options: CrawlerOptions = {}): {
 			socket = await dial(entry);
 			const latencyMs = performance.now() - start;
 
-			// Onion peers never learn our address, and we must not leak theirs in clear.
-			const remoteAddr = network === "tor" ? { ip: "0.0.0.0", port: 0 } : { ip, port };
-			const handshakeResult = await performHandshake(
-				socket,
-				{ ip: "0.0.0.0", port: 0 },
-				remoteAddr,
-				{ handshakeTimeoutMs, feeFilterWaitMs: 200 },
-			);
+			// The version message only carries IP addresses; Core sends zeros for onion peers.
+			const remoteAddr = network === "tor" ? UNSPECIFIED_ADDR : { ip, port };
+			const handshakeResult = await performHandshake(socket, UNSPECIFIED_ADDR, remoteAddr, {
+				handshakeTimeoutMs,
+				feeFilterWaitMs: 200,
+			});
 
 			if (!handshakeResult.ok) {
 				await channel.push({

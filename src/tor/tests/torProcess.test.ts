@@ -1,16 +1,9 @@
 import { describe, it } from "node:test";
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { startTor } from "../torProcess.js";
-
-function fakeTor(script: string): string {
-	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-tor-"));
-	const binary = path.join(dir, "tor");
-	fs.writeFileSync(binary, `#!/bin/sh\n${script}\n`, { mode: 0o700 });
-	return binary;
-}
+import { fakeTor } from "./fakeTor.js";
 
 const BOOTSTRAP_OK = [
 	'echo "Oct 24 00:00:00.000 [notice] Opening Socks listener on 127.0.0.1:0"',

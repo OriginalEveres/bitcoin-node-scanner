@@ -30,7 +30,6 @@ export class Socks5Error extends Error {
 
 export type Socks5ConnectOptions = {
 	proxyPort: number;
-	proxyHost?: string;
 	host: string;
 	port: number;
 	timeoutMs: number;
@@ -50,16 +49,13 @@ function boundAddressLength(reply: Buffer): number | undefined {
 }
 
 /**
- * Open a TCP connection to `host:port` through a SOCKS5 proxy using no
+ * Open a TCP connection to `host:port` through a SOCKS5 proxy on 127.0.0.1 using no
  * authentication and hostname addressing, so `.onion` names are resolved by Tor.
  * Resolves with the socket once the proxy reports success.
  */
 export function socks5Connect(options: Socks5ConnectOptions): Promise<net.Socket> {
 	return new Promise((resolve, reject) => {
-		const socket = net.connect({
-			host: options.proxyHost ?? "127.0.0.1",
-			port: options.proxyPort,
-		});
+		const socket = net.connect({ host: "127.0.0.1", port: options.proxyPort });
 		let buffer = Buffer.alloc(0);
 		let greeted = false;
 
