@@ -1,5 +1,5 @@
 import * as net from "node:net";
-import type { NetAddr } from "../node.js";
+import type { NetAddr, Network } from "../node.js";
 import type { NodeScanResult, DiscoverySource, ScanErrorCode } from "../scanner/NodeScanResult.js";
 import { performHandshake } from "../handshake/handshake.js";
 import { requestAddrs } from "./getaddr.js";
@@ -62,12 +62,14 @@ export type CrawlResult = {
 	totalDiscovered: number;
 };
 
-type QueueEntry = {
-	ip: string;
-	port: number;
+type QueueEntry = NetAddr & {
 	source: DiscoverySource;
 	depth: number;
 };
+
+function isClearnet(network?: Network): boolean {
+	return network === undefined || network === "ipv4" || network === "ipv6";
+}
 
 /**
  * Stream nodes as they are scanned. Returns an async iterable that yields
@@ -105,16 +107,28 @@ export function crawlStream(options: CrawlerOptions = {}): {
 
 	const channel = createAsyncChannel<NodeScanResult>(resultBufferSize, signal);
 
-	function enqueue(ip: string, port: number, source: DiscoverySource, depth: number): void {
-		const key = `${ip}:${port}`;
+	function enqueue(addr: NetAddr, source: DiscoverySource, depth: number): void {
+		const key = `${addr.ip}:${addr.port}`;
 		if (seen.has(key)) return;
 		if (seen.size >= maxNodes) return;
 		seen.add(key);
-		queue.push({ ip, port, source, depth });
+		queue.push({ ...addr, source, depth });
 	}
 
 	async function processNode(entry: QueueEntry): Promise<void> {
-		const { ip, port, source, depth } = entry;
+		const { source, depth, ...addr } = entry;
+		const { ip, port, network } = addr;
+
+		if (!isClearnet(network)) {
+			await channel.push({
+				...addr,
+				source,
+				reachable: false,
+				error: { code: "SKIPPED", message: `${network} connectivity not enabled` },
+			});
+			return;
+		}
+
 		const start = performance.now();
 		const socket = new net.Socket();
 
@@ -148,8 +162,7 @@ export function crawlStream(options: CrawlerOptions = {}): {
 
 			if (!handshakeResult.ok) {
 				await channel.push({
-					ip,
-					port,
+					...addr,
 					source,
 					reachable: true,
 					latencyMs,
@@ -161,8 +174,7 @@ export function crawlStream(options: CrawlerOptions = {}): {
 
 			// Push result immediately so the consumer sees it without waiting for getaddr.
 			await channel.push({
-				ip,
-				port,
+				...addr,
 				source,
 				reachable: true,
 				latencyMs,
@@ -172,7 +184,7 @@ export function crawlStream(options: CrawlerOptions = {}): {
 			if (depth < maxDepth && !aborted) {
 				const addrs = await requestAddrs(socket, getaddrTimeoutMs);
 				for (const addr of addrs) {
-					enqueue(addr.ip, addr.port, "addr", depth + 1);
+					enqueue(addr, "addr", depth + 1);
 				}
 			}
 
@@ -181,8 +193,7 @@ export function crawlStream(options: CrawlerOptions = {}): {
 			socket.destroy();
 			const mapped = mapError(err);
 			await channel.push({
-				ip,
-				port,
+				...addr,
 				source,
 				reachable: false,
 				error: mapped,
@@ -234,13 +245,13 @@ export function crawlStream(options: CrawlerOptions = {}): {
 		if (!options.skipDnsSeeds) {
 			const dnsAddrs = await resolveDnsSeeds();
 			for (const addr of dnsAddrs) {
-				enqueue(addr.ip, addr.port, "dns", 0);
+				enqueue(addr, "dns", 0);
 			}
 		}
 
 		if (options.manualAddresses) {
 			for (const addr of options.manualAddresses) {
-				enqueue(addr.ip, addr.port, "manual", 0);
+				enqueue(addr, "manual", 0);
 			}
 		}
 
@@ -258,7 +269,7 @@ export function crawlStream(options: CrawlerOptions = {}): {
 					seen.size < maxNodes &&
 					pending + generated - queueIdx < maxConcurrent * 2
 				) {
-					enqueue(generateRandomIp(), 8333, "random", 0);
+					enqueue({ ip: generateRandomIp(), port: 8333 }, "random", 0);
 					generated++;
 				}
 				trySpawn();

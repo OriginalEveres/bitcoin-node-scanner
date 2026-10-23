@@ -179,4 +179,55 @@ describe(performHandshake.name, () => {
 			await closeMockNode(server);
 		}
 	});
+
+	it("sends sendaddrv2 between receiving version and sending verack", async () => {
+		const commands: string[] = [];
+		const { server, port } = await createMockBitcoinNode({
+			behavior: "no-feefilter",
+			onCommand: (command) => commands.push(command),
+		});
+
+		try {
+			const socket = await connectTo(port);
+			const result = await performHandshake(
+				socket,
+				{ ip: "127.0.0.1", port: 0 },
+				{ ip: "127.0.0.1", port },
+				{ handshakeTimeoutMs: 3000, feeFilterWaitMs: 100 },
+			);
+
+			assert.equal(result.ok, true);
+			assert.deepEqual(commands, ["version", "sendaddrv2", "verack"]);
+
+			socket.destroy();
+		} finally {
+			await closeMockNode(server);
+		}
+	});
+
+	it("does not send sendaddrv2 to peers older than protocol 70016", async () => {
+		const commands: string[] = [];
+		const { server, port } = await createMockBitcoinNode({
+			behavior: "no-feefilter",
+			protocolVersion: 70015,
+			onCommand: (command) => commands.push(command),
+		});
+
+		try {
+			const socket = await connectTo(port);
+			const result = await performHandshake(
+				socket,
+				{ ip: "127.0.0.1", port: 0 },
+				{ ip: "127.0.0.1", port },
+				{ handshakeTimeoutMs: 3000, feeFilterWaitMs: 100 },
+			);
+
+			assert.equal(result.ok, true);
+			assert.deepEqual(commands, ["version", "verack"]);
+
+			socket.destroy();
+		} finally {
+			await closeMockNode(server);
+		}
+	});
 });

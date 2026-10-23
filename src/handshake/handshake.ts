@@ -2,8 +2,10 @@ import type * as net from "node:net";
 import {
 	MAINNET_MAGIC,
 	PROTOCOL_VERSION,
+	ADDRV2_MIN_PROTOCOL_VERSION,
 	COMMAND_VERSION,
 	COMMAND_VERACK,
+	COMMAND_SENDADDRV2,
 	COMMAND_FEEFILTER,
 } from "../protocol/constants.js";
 import { serializeMessage } from "../protocol/message.js";
@@ -30,8 +32,8 @@ export type HandshakeOptions = {
  * Flow:
  * 1. Send our version message
  * 2. Receive remote's version message
- * 3. Receive remote's verack
- * 4. Send our verack
+ * 3. Send sendaddrv2 (BIP 155) if the peer is new enough, then our verack
+ * 4. Receive remote's verack
  * 5. Optionally wait for feefilter
  */
 export function performHandshake(
@@ -87,6 +89,12 @@ export function performHandshake(
 					services: version.services,
 					relay: version.relay,
 				};
+
+				if (version.protocolVersion >= ADDRV2_MIN_PROTOCOL_VERSION) {
+					socket.write(
+						serializeMessage(COMMAND_SENDADDRV2, Buffer.alloc(0), MAINNET_MAGIC),
+					);
+				}
 
 				// Send our verack in response to their version
 				const verackMsg = serializeMessage(COMMAND_VERACK, Buffer.alloc(0), MAINNET_MAGIC);

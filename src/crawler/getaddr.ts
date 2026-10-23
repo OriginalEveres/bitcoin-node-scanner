@@ -1,14 +1,20 @@
 import type * as net from "node:net";
-import { MAINNET_MAGIC, COMMAND_GETADDR, COMMAND_ADDR } from "../protocol/constants.js";
+import {
+	MAINNET_MAGIC,
+	COMMAND_GETADDR,
+	COMMAND_ADDR,
+	COMMAND_ADDRV2,
+} from "../protocol/constants.js";
 import { serializeMessage } from "../protocol/message.js";
 import { parseAddr } from "../protocol/addr.js";
+import { parseAddrV2 } from "../protocol/addrv2.js";
 import type { AddrEntry } from "../protocol/addr.js";
 import { MessageReader } from "../handshake/messageReader.js";
 
 const DEFAULT_GETADDR_TIMEOUT_MS = 10_000;
 
 /**
- * Send `getaddr` on an already-handshaked socket and wait for the `addr` response.
+ * Send `getaddr` on an already-handshaked socket and wait for the `addr` or `addrv2` response.
  * Returns parsed address entries, or an empty array on timeout/error.
  */
 export function requestAddrs(
@@ -42,6 +48,10 @@ export function requestAddrs(
 			while ((msg = reader.nextMessage())) {
 				if (msg.command === COMMAND_ADDR) {
 					settle(parseAddr(msg.payload));
+					return;
+				}
+				if (msg.command === COMMAND_ADDRV2) {
+					settle(parseAddrV2(msg.payload));
 					return;
 				}
 			}

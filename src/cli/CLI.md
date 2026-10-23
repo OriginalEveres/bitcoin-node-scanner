@@ -19,7 +19,7 @@ btc-crawl [options]
 | `--max-concurrent <n>` | Simultaneous TCP connections | 50 |
 | `--connect-timeout <ms>` | TCP connect timeout | 5000 |
 | `--handshake-timeout <ms>` | Version/verack handshake timeout | 5000 |
-| `--getaddr-timeout <ms>` | Wait time for `addr` response | 10000 |
+| `--getaddr-timeout <ms>` | Wait time for `addr`/`addrv2` response | 10000 |
 | `--manual <ip[:port]>` | Add a manual seed address (repeatable) | — |
 | `--skip-dns` | Skip DNS seed resolution | false |
 | `--random <n>` | Probe `n` random public IPv4 addresses on port 8333 | — |
