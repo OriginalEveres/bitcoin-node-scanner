@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { Network } from "../node.js";
 import type { AddrEntry } from "./addr.js";
 import { bytesToIp } from "./ip.js";
-import { decodeVarInt } from "./varInt.js";
+import { decodeVarInt, decodeVarIntBigInt } from "./varInt.js";
 import { encodeBase32 } from "./base32.js";
 
 const TORV3_VERSION = Buffer.from([3]);
@@ -49,7 +49,7 @@ export function parseAddrV2(payload: Buffer): AddrEntry[] {
 			const timestamp = payload.readUInt32LE(offset);
 			offset += 4;
 
-			const services = decodeVarInt(payload, offset);
+			const services = decodeVarIntBigInt(payload, offset);
 			offset += services.bytesRead;
 
 			const networkId = payload.readUInt8(offset);
@@ -69,7 +69,7 @@ export function parseAddrV2(payload: Buffer): AddrEntry[] {
 
 			entries.push({
 				timestamp,
-				services: { raw: BigInt(services.value) },
+				services: { raw: services.value },
 				ip: spec.render(address),
 				port,
 				network: spec.network,

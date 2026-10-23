@@ -82,6 +82,21 @@ describe(parseAddrV2.name, () => {
 		);
 	});
 
+	it("keeps all 64 service bits", () => {
+		const entries = parseAddrV2(
+			buildAddrV2Payload([
+				{
+					networkId: 1,
+					address: Buffer.from([1, 2, 3, 4]),
+					port: 8333,
+					services: 0x8000000000000001n,
+				},
+			]),
+		);
+
+		assert.equal(entries[0]!.services.raw, 0x8000000000000001n);
+	});
+
 	it("returns empty array for an empty payload", () => {
 		assert.deepEqual(parseAddrV2(Buffer.alloc(0)), []);
 		assert.deepEqual(parseAddrV2(encodeVarInt(0)), []);

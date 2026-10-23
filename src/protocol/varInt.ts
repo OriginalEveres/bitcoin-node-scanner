@@ -36,3 +36,23 @@ export function decodeVarInt(buf: Buffer, offset: number): { value: number; byte
 	}
 	return { value: Number(buf.readBigUInt64LE(offset + 1)), bytesRead: 9 };
 }
+
+/** CompactSize for 64-bit values such as service masks, where `number` would lose precision. */
+export function encodeVarIntBigInt(n: bigint): Buffer {
+	if (n <= 0xffffffffn) return encodeVarInt(Number(n));
+	const buf = Buffer.alloc(9);
+	buf.writeUInt8(0xff, 0);
+	buf.writeBigUInt64LE(n, 1);
+	return buf;
+}
+
+export function decodeVarIntBigInt(
+	buf: Buffer,
+	offset: number,
+): { value: bigint; bytesRead: number } {
+	if (buf.readUInt8(offset) !== 0xff) {
+		const { value, bytesRead } = decodeVarInt(buf, offset);
+		return { value: BigInt(value), bytesRead };
+	}
+	return { value: buf.readBigUInt64LE(offset + 1), bytesRead: 9 };
+}

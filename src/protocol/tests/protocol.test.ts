@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import * as assert from "node:assert/strict";
-import { encodeVarInt, decodeVarInt } from "../varInt.js";
+import { encodeVarInt, decodeVarInt, encodeVarIntBigInt, decodeVarIntBigInt } from "../varInt.js";
 import {
 	hasService,
 	describeServices,
@@ -42,6 +42,24 @@ describe("varInt", () => {
 		const decoded = decodeVarInt(combined, 5);
 		assert.equal(decoded.value, 300);
 	});
+
+	const bigCases: Array<[bigint, number]> = [
+		[0n, 1],
+		[0xffffffffn, 5],
+		[0x100000000n, 9],
+		[0x8000000000000001n, 9],
+		[0xffffffffffffffffn, 9],
+	];
+
+	for (const [value, expectedBytes] of bigCases) {
+		it(`round-trips ${value}n in ${expectedBytes} byte(s)`, () => {
+			const encoded = encodeVarIntBigInt(value);
+			assert.equal(encoded.length, expectedBytes);
+			const decoded = decodeVarIntBigInt(encoded, 0);
+			assert.equal(decoded.value, value);
+			assert.equal(decoded.bytesRead, expectedBytes);
+		});
+	}
 });
 
 describe("services", () => {
