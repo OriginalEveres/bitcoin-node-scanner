@@ -1,7 +1,7 @@
 # bitcoin-node-scanner
 
 Bitcoin node scanner and P2P network crawler. Discovers reachable BTC nodes
-via DNS seeds, `addr` gossip, manual seeds, or random IPv4 probing, performs
+via DNS seeds, `addr`/`addrv2` gossip, manual seeds, or random IPv4 probing, performs
 the `version`/`verack` handshake, and collects per-node metadata (user agent,
 protocol version, services, block height, fee filter, latency).
 
@@ -42,6 +42,16 @@ Save results as JSON Lines:
 
 ```bash
 yarn crawl --out results.jsonl
+```
+
+Crawl Tor onion peers too. The first command downloads the Tor Expert Bundle
+for your platform (macOS arm64/x64, Linux x64), verifies its pinned SHA-256 and
+unpacks it into `vendor/tor/`; the crawler then starts and stops that binary
+itself:
+
+```bash
+yarn fetch-tor
+yarn crawl --tor
 ```
 
 See [`src/cli/CLI.md`](./src/cli/CLI.md) for the full CLI reference.

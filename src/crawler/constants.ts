@@ -28,3 +28,9 @@ export const RESULT_BUFFER_SIZE = 256;
  * The feeder tops up to `maxConcurrent * 2` pending entries.
  */
 export const RANDOM_QUEUE_REFILL = 100;
+
+/** How long to wait for a SOCKS5 connect through Tor; circuits can take tens of seconds. */
+export const TOR_CONNECT_TIMEOUT_MS = 30_000;
+
+/** Maximum simultaneous connections through Tor, independent of {@link MAX_CONCURRENT}. */
+export const TOR_MAX_CONCURRENT = 10;
